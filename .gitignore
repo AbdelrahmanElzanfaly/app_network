@@ -1,0 +1,17 @@
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# A library's lock file is not committed: the app that depends on it resolves
+# the versions.
+pubspec.lock
+
+# Local paths to sibling packages, for working on several at once.
+pubspec_overrides.yaml
+
+.idea/
+*.iml
+.vscode/
+.DS_Store
