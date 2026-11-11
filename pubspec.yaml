@@ -1,6 +1,6 @@
 name: app_network
 description: The HTTP transport — a configured Dio with auth, locale and error conversion.
-version: 0.1.0
+version: 0.2.0
 publish_to: none
 
 environment:

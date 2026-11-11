@@ -2,8 +2,8 @@ import 'package:dio/dio.dart';
 
 /// Where the client reads the bearer token from.
 ///
-/// Implemented by the app's session storage. Read on every request, so a
-/// sign-out takes effect on the very next call.
+/// Implemented by the app's session storage. Read on every request and
+/// every resend, so a sign-out takes effect on the very next call.
 abstract interface class TokenStore {
   Future<String?> readAccessToken();
 }
@@ -33,4 +33,25 @@ abstract interface class SessionRefresher {
   /// Concurrent callers must share one renewal: refresh tokens are often
   /// single-use, and a second parallel renewal would invalidate the first.
   Future<String?> refreshAccessToken();
+}
+
+/// Whether the device has a network at all, asked before every request.
+///
+/// An interface being up is not proof of internet access, so this answers
+/// only "certainly not" or "worth trying". Must answer quickly, never throw,
+/// and answer true when unsure: a wrong "no" fails real requests, a wrong
+/// "yes" only costs one attempt.
+abstract interface class NetworkStatus {
+  Future<bool> hasNetwork();
+}
+
+/// Told how each request ended at the transport level — once per request,
+/// after any retries — so reachability is judged from real traffic rather
+/// than from the interface list alone.
+abstract interface class ReachabilityObserver {
+  /// The server answered: any HTTP status, error statuses included.
+  void onReachable();
+
+  /// No answer: the connection failed or could not be opened in time.
+  void onUnreachable();
 }
