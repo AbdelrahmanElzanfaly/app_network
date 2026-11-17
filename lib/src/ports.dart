@@ -52,6 +52,7 @@ abstract interface class ReachabilityObserver {
   /// The server answered: any HTTP status, error statuses included.
   void onReachable();
 
-  /// No answer: the connection failed or could not be opened in time.
+  /// No answer: the connection failed, could not be opened in time, or was
+  /// lost after the request was sent.
   void onUnreachable();
 }
