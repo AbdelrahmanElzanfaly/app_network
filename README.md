@@ -89,9 +89,11 @@ A refused request fails with a `connectionError` carrying
 connection failure.
 
 Verdicts: any HTTP response, error statuses included, is reachable; a
-`connectionError` or `connectionTimeout` is unreachable. A receive, send or
-transform timeout, `unknown`, `cancel`, `badCertificate`, or a refusal gives no
-verdict.
+`connectionError` or `connectionTimeout` is unreachable, and so is a
+connection lost after the request was sent (an `unknown` carrying a
+`SocketException` or an `HttpException`). A receive, send or transform
+timeout, any other `unknown` (TLS failures included), `cancel`,
+`badCertificate`, or a refusal gives no verdict.
 
 ## `extra` keys
 

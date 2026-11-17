@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:app_network/app_network.dart';
 import 'package:dio/dio.dart';
@@ -314,6 +315,37 @@ void main() {
         expect(observer.verdicts, isEmpty);
       });
     }
+
+    for (final lost in <Object>[
+      const SocketException('Connection reset by peer'),
+      const HttpException('Connection closed while receiving data'),
+    ]) {
+      test('a connection lost after the request was sent '
+          '(${lost.runtimeType}): unreachable, and not sent again', () async {
+        final observer = RecordingObserver();
+        // What dio's IO adapter does then: the socket's own error, unwrapped.
+        final server = ScriptedServer([(_) => throw lost]);
+
+        final error = await failureOf(
+          client(server, observer: observer).get<void>('/x'),
+        );
+
+        expect(error.type, DioExceptionType.unknown);
+        expect(server.calls, 1, reason: 'the server may have acted on it');
+        expect(observer.verdicts, ['unreachable']);
+      });
+    }
+
+    test('a TLS failure: no verdict', () async {
+      final observer = RecordingObserver();
+      final server = ScriptedServer([
+        (_) => throw const HandshakeException('CERTIFICATE_VERIFY_FAILED'),
+      ]);
+
+      await failureOf(client(server, observer: observer).get<void>('/x'));
+
+      expect(observer.verdicts, isEmpty);
+    });
 
     test('an observer that throws does not change the outcome', () async {
       final server = ScriptedServer([status(200)]);

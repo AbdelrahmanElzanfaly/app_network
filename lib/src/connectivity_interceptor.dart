@@ -1,3 +1,5 @@
+import 'dart:io' show HttpException, SocketException;
+
 import 'package:dio/dio.dart';
 
 import 'ports.dart';
@@ -121,15 +123,26 @@ class ConnectivityInterceptor extends Interceptor {
         extra[_reportedKey] = true;
         _report((observer) => observer.onReachable());
       } else if (err.type == DioExceptionType.connectionError ||
-          err.type == DioExceptionType.connectionTimeout) {
+          err.type == DioExceptionType.connectionTimeout ||
+          _lostConnection(err)) {
         extra[_reportedKey] = true;
         _report((observer) => observer.onUnreachable());
       }
       // Anything else says nothing about reachability: a receive, send or
-      // transform timeout, `unknown` (TLS included), cancel, bad certificate.
+      // transform timeout, any other `unknown` (TLS included), cancel, bad
+      // certificate.
     }
     handler.next(err);
   }
+
+  /// The connection was lost after the request was sent. dio's IO adapter
+  /// converts a failure to open the connection, but lets the socket's own
+  /// error through once the request is on its way, so it arrives as
+  /// `unknown`. A TLS failure is not one of these: it says nothing about
+  /// reaching the server.
+  static bool _lostConnection(DioException err) =>
+      err.type == DioExceptionType.unknown &&
+      (err.error is SocketException || err.error is HttpException);
 
   Future<bool> _hasNetwork() async {
     final status = this.status;
