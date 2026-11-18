@@ -13,8 +13,10 @@ import 'retry_interceptor.dart';
 /// never renew — the token endpoint itself.
 ///
 /// Pass [networkStatus] to fail requests at once while the device has no
-/// network, and [reachabilityObserver] to be told how each request finally
-/// ended. `NetworkConfig.retryPolicy` decides which failures are resent.
+/// network, [reachabilityObserver] to be told how each request finally
+/// ended, and [serviceObserver] to be told when the server answers that it
+/// cannot serve (a 5xx). `NetworkConfig.retryPolicy` decides which failures
+/// are resent.
 ///
 /// Interceptor order: Auth → RefreshToken → Retry → Connectivity →
 /// ErrorHandler → Log.
@@ -27,6 +29,7 @@ abstract final class DioManager {
     SessionRefresher? sessionRefresher,
     NetworkStatus? networkStatus,
     ReachabilityObserver? reachabilityObserver,
+    ServiceObserver? serviceObserver,
   }) {
     final dio = Dio(
       BaseOptions(
@@ -53,10 +56,13 @@ abstract final class DioManager {
         RetryInterceptor(dio: dio, policy: config.retryPolicy),
       // After Retry: its onError sees only a request's final outcome. Before
       // the error handler: a refusal is converted like any connection error.
-      if (networkStatus != null || reachabilityObserver != null)
+      if (networkStatus != null ||
+          reachabilityObserver != null ||
+          serviceObserver != null)
         ConnectivityInterceptor(
           status: networkStatus,
           observer: reachabilityObserver,
+          serviceObserver: serviceObserver,
         ),
       ErrorHandlerInterceptor(errorConverter),
       if (config.enableLogging)

@@ -9,6 +9,7 @@ Dio _create({
   SessionRefresher? sessionRefresher,
   NetworkStatus? networkStatus,
   ReachabilityObserver? reachabilityObserver,
+  ServiceObserver? serviceObserver,
 }) => DioManager.createDio(
   config: config,
   tokenStore: Tokens('token'),
@@ -16,6 +17,7 @@ Dio _create({
   sessionRefresher: sessionRefresher,
   networkStatus: networkStatus,
   reachabilityObserver: reachabilityObserver,
+  serviceObserver: serviceObserver,
 );
 
 /// The interceptors this package adds, in order; dio's own built-in ones
@@ -102,6 +104,19 @@ void main() {
 
       expect(_types(dio), contains(ConnectivityInterceptor));
     });
+
+    test(
+      'a service observer alone adds Connectivity, and is told of a 5xx',
+      () async {
+        final service = RecordingServiceObserver();
+        final dio = _create(serviceObserver: service)
+          ..httpClientAdapter = ScriptedServer([status(500)]);
+
+        expect(_types(dio), contains(ConnectivityInterceptor));
+        await failureOf(dio.get<void>('/x'));
+        expect(service.verdicts, ['unavailable']);
+      },
+    );
   });
 
   group('NetworkConfig', () {

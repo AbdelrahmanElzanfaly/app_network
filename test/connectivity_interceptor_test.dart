@@ -17,6 +17,14 @@ class _ThrowingObserver implements ReachabilityObserver {
   void onUnreachable() => throw StateError('observer failed');
 }
 
+class _ThrowingServiceObserver implements ServiceObserver {
+  @override
+  void onServiceAvailable() => throw StateError('observer failed');
+
+  @override
+  void onServiceUnavailable() => throw StateError('observer failed');
+}
+
 void main() {
   group('the gate', () {
     test('no network: refused before sending, converted, not reported and '
@@ -357,5 +365,163 @@ void main() {
 
       expect(response.statusCode, 200);
     });
+  });
+
+  group('service verdicts', () {
+    for (final code in [200, 204, 401, 404, 422]) {
+      test('$code: available, once', () async {
+        final service = RecordingServiceObserver();
+        final server = ScriptedServer([status(code)]);
+
+        await client(
+          server,
+          serviceObserver: service,
+        ).get<void>('/x').then<void>((_) {}, onError: (_) {});
+
+        expect(service.verdicts, ['available']);
+      });
+    }
+
+    test('a 500, which is not retried: unavailable, once', () async {
+      final service = RecordingServiceObserver();
+      final server = ScriptedServer([status(500)]);
+
+      final error = await failureOf(
+        client(server, serviceObserver: service).get<void>('/x'),
+      );
+
+      expect(server.calls, 1);
+      expect(error.response?.statusCode, 500);
+      expect(service.verdicts, ['unavailable']);
+    });
+
+    test('a 503 that its retries do not fix: unavailable, once, after the '
+        'last of them', () async {
+      final service = RecordingServiceObserver();
+      final observer = RecordingObserver();
+      final server = ScriptedServer([status(503)]);
+
+      await failureOf(
+        client(
+          server,
+          observer: observer,
+          serviceObserver: service,
+        ).get<void>('/x'),
+      );
+
+      expect(server.calls, 3);
+      expect(service.verdicts, ['unavailable']);
+      // Reached all the same: the two verdicts are separate.
+      expect(observer.verdicts, ['reachable']);
+    });
+
+    test('a 503 that a retry fixes: available only', () async {
+      final service = RecordingServiceObserver();
+      final server = ScriptedServer([status(503), status(200)]);
+
+      await client(server, serviceObserver: service).get<void>('/x');
+
+      expect(server.calls, 2);
+      expect(service.verdicts, ['available']);
+    });
+
+    test('a write that gets a 503 is not resent: unavailable', () async {
+      final service = RecordingServiceObserver();
+      final server = ScriptedServer([status(503)]);
+
+      await failureOf(
+        client(server, serviceObserver: service).post<void>('/x'),
+      );
+
+      expect(server.calls, 1);
+      expect(service.verdicts, ['unavailable']);
+    });
+
+    for (final type in [
+      _connectionError,
+      DioExceptionType.connectionTimeout,
+      DioExceptionType.receiveTimeout,
+    ]) {
+      test('${type.name}: no answer, no verdict', () async {
+        final service = RecordingServiceObserver();
+        final server = ScriptedServer([failWith(type)]);
+
+        await failureOf(
+          client(server, serviceObserver: service).get<void>('/x'),
+        );
+
+        expect(service.verdicts, isEmpty);
+      });
+    }
+
+    test('a request the gate refused gives no verdict', () async {
+      final service = RecordingServiceObserver();
+      final server = ScriptedServer([status(200)]);
+
+      await failureOf(
+        client(
+          server,
+          status: FakeNetworkStatus(() async => false),
+          serviceObserver: service,
+        ).get<void>('/x'),
+      );
+
+      expect(server.calls, 0);
+      expect(service.verdicts, isEmpty);
+    });
+
+    test(
+      'each request has its own verdict: unavailable, then available',
+      () async {
+        final service = RecordingServiceObserver();
+        final server = ScriptedServer([status(500), status(200)]);
+        final dio = client(server, serviceObserver: service);
+
+        await failureOf(dio.get<void>('/x'));
+        await dio.get<void>('/x');
+
+        expect(service.verdicts, ['unavailable', 'available']);
+      },
+    );
+
+    test('a renewed 401 reports the resend\'s answer, once', () async {
+      final service = RecordingServiceObserver();
+      final tokens = Tokens('old');
+      final server = ScriptedServer([status(401), status(500)]);
+
+      await failureOf(
+        client(
+          server,
+          tokens: tokens,
+          refresher: Refresher(() async => tokens.token = 'new'),
+          serviceObserver: service,
+        ).get<void>('/x'),
+      );
+
+      expect(service.verdicts, ['unavailable']);
+    });
+
+    test(
+      'an observer that throws does not change the request\'s outcome',
+      () async {
+        final ok = ScriptedServer([status(200)]);
+        final failing = ScriptedServer([status(500)]);
+
+        final response = await client(
+          ok,
+          serviceObserver: _ThrowingServiceObserver(),
+        ).get<void>('/x');
+        final error = await failureOf(
+          client(
+            failing,
+            serviceObserver: _ThrowingServiceObserver(),
+          ).get<void>('/x'),
+        );
+
+        expect(response.statusCode, 200);
+        expect(error.response?.statusCode, 500);
+        expect(error.error, isA<Converted>());
+      },
+    );
   });
 }

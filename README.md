@@ -17,6 +17,7 @@ final dio = DioManager.createDio(
   sessionRefresher: sessionRefresher, // optional: renew and retry on 401
   networkStatus: networkStatus,       // optional: fail fast with no network
   reachabilityObserver: observer,     // optional: told how requests ended
+  serviceObserver: serviceObserver,   // optional: told of 5xx answers
 );
 ```
 
@@ -33,6 +34,7 @@ the ports.
 | `SessionRefresher` | a new token after a 401 | null ends the session; a throw keeps it |
 | `NetworkStatus` | "is there a network at all?" before each request | answer fast, never throw, true when unsure |
 | `ReachabilityObserver` | each request's final transport outcome | `onReachable` (any HTTP status) or `onUnreachable` (no answer), once per request |
+| `ServiceObserver` | whether the server could serve each request it answered | `onServiceUnavailable` (a 5xx) or `onServiceAvailable` (any other status), once per request; nothing when there was no answer |
 
 ## Interceptor order
 
@@ -43,7 +45,7 @@ the ports.
 | `AuthInterceptor` | always | bearer token and `accept-language` |
 | `RefreshTokenInterceptor` | `sessionRefresher` given | renews on 401 and resends once |
 | `RetryInterceptor` | `config.retryPolicy.isEnabled` | resends a transient failure (below) |
-| `ConnectivityInterceptor` | `networkStatus` or `reachabilityObserver` given | refuses a request when there is no network; reports each request's outcome |
+| `ConnectivityInterceptor` | `networkStatus`, `reachabilityObserver` or `serviceObserver` given | refuses a request when there is no network; reports each request's outcome |
 | `ErrorHandlerInterceptor` | always | puts the converter's output on `DioException.error` |
 | `LogInterceptor` | `config.enableLogging` | logs every attempt |
 
@@ -94,6 +96,11 @@ connection lost after the request was sent (an `unknown` carrying a
 `SocketException` or an `HttpException`). A receive, send or transform
 timeout, any other `unknown` (TLS failures included), `cancel`,
 `badCertificate`, or a refusal gives no verdict.
+
+Service verdicts go to `ServiceObserver`, at the same point: a 5xx as the
+request's final answer (after its retries) is unavailable, any other status
+is available. A request that got no answer gives none, so a lost connection
+never reads as a failing server.
 
 ## `extra` keys
 

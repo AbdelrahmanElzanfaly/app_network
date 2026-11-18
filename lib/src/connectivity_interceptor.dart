@@ -16,8 +16,9 @@ class NoNetworkException implements Exception {
       'NoNetworkException: the device has no network connection.';
 }
 
-/// Fails a request at once when the device has no network, and tells
-/// [observer] how each request finally ended.
+/// Fails a request at once when the device has no network, tells [observer]
+/// how each request finally ended, and [serviceObserver] whether the server
+/// could serve the ones it answered.
 ///
 /// Fail-open: an unanswered or failing [status] means "send". While the
 /// device keeps reporting no network, one request per [probeInterval] is
@@ -32,12 +33,14 @@ class ConnectivityInterceptor extends Interceptor {
   ConnectivityInterceptor({
     this.status,
     this.observer,
+    this.serviceObserver,
     this.probeInterval = const Duration(seconds: 10),
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final NetworkStatus? status;
   final ReachabilityObserver? observer;
+  final ServiceObserver? serviceObserver;
   final Duration probeInterval;
 
   final DateTime Function() _clock;
@@ -109,6 +112,7 @@ class ConnectivityInterceptor extends Interceptor {
     if (extra[_reportedKey] != true) {
       extra[_reportedKey] = true;
       _report((observer) => observer.onReachable());
+      _reportService(response.statusCode);
     }
     handler.next(response);
   }
@@ -119,9 +123,11 @@ class ConnectivityInterceptor extends Interceptor {
     if (extra[noNetworkKey] != true &&
         extra[RetryInterceptor.retryingKey] != true &&
         extra[_reportedKey] != true) {
-      if (err.response != null) {
+      final response = err.response;
+      if (response != null) {
         extra[_reportedKey] = true;
         _report((observer) => observer.onReachable());
+        _reportService(response.statusCode);
       } else if (err.type == DioExceptionType.connectionError ||
           err.type == DioExceptionType.connectionTimeout ||
           _lostConnection(err)) {
@@ -154,6 +160,23 @@ class ConnectivityInterceptor extends Interceptor {
       );
     } catch (_) {
       return true;
+    }
+  }
+
+  /// A 5xx says the server could not serve; any other status that it could.
+  /// Advisory, like the reachability verdict: an observer that throws is
+  /// ignored.
+  void _reportService(int? statusCode) {
+    final observer = serviceObserver;
+    if (observer == null || statusCode == null) return;
+    try {
+      if (statusCode >= 500) {
+        observer.onServiceUnavailable();
+      } else {
+        observer.onServiceAvailable();
+      }
+    } catch (_) {
+      // Ignored: the next answer corrects a missed verdict.
     }
   }
 
