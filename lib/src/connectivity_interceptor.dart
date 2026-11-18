@@ -51,10 +51,12 @@ class ConnectivityInterceptor extends Interceptor {
   /// Set on a request this gate refused.
   static const String noNetworkKey = 'connectivityRefused';
 
-  /// true on a request's `extra`: a 5xx answer to it reports nothing to
-  /// [serviceObserver], for a call whose own 5xx is a state of its own that
-  /// the caller shows (prices not read yet, say), not a failing server. Any
-  /// other answer still reports the service available.
+  /// true on a request's `extra`: its answer reports nothing to
+  /// [serviceObserver], whatever its status. For a call that says nothing
+  /// about the service the others need: one the server answers from its
+  /// own store (prices it reads on a timer, say), whose 5xx is a state the
+  /// caller shows and whose 2xx must not clear a verdict another call gave.
+  /// Reachability is reported as for any request.
   static const String quietServiceKey = 'connectivityQuietService';
 
   /// Set once a request's outcome was reported: one verdict per request.
@@ -169,15 +171,15 @@ class ConnectivityInterceptor extends Interceptor {
     }
   }
 
-  /// A 5xx says the server could not serve, unless the request is marked
-  /// [quietServiceKey]; any other status that it could. Advisory, like the
+  /// A 5xx says the server could not serve; any other status that it could.
+  /// A request marked [quietServiceKey] says neither. Advisory, like the
   /// reachability verdict: an observer that throws is ignored.
   void _reportService(int? statusCode, Map<String, dynamic> extra) {
     final observer = serviceObserver;
     if (observer == null || statusCode == null) return;
+    if (extra[quietServiceKey] == true) return;
     try {
       if (statusCode >= 500) {
-        if (extra[quietServiceKey] == true) return;
         observer.onServiceUnavailable();
       } else {
         observer.onServiceAvailable();

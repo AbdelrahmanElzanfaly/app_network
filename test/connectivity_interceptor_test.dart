@@ -446,7 +446,8 @@ void main() {
       expect(observer.verdicts, ['reachable']);
     });
 
-    test('a quiet request that is answered: available', () async {
+    test('a quiet request that is answered: no service verdict either, so '
+        'it cannot clear one another request gave', () async {
       final service = RecordingServiceObserver();
       final server = ScriptedServer([status(200)]);
 
@@ -457,7 +458,7 @@ void main() {
         ),
       );
 
-      expect(service.verdicts, ['available']);
+      expect(service.verdicts, isEmpty);
     });
 
     test('a write that gets a 503 is not resent: unavailable', () async {
