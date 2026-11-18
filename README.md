@@ -100,7 +100,8 @@ timeout, any other `unknown` (TLS failures included), `cancel`,
 Service verdicts go to `ServiceObserver`, at the same point: a 5xx as the
 request's final answer (after its retries) is unavailable, any other status
 is available. A request that got no answer gives none, so a lost connection
-never reads as a failing server.
+never reads as a failing server, and neither does a 5xx to a request marked
+`ConnectivityInterceptor.quietServiceKey`.
 
 ## `extra` keys
 
@@ -110,6 +111,7 @@ Set on a request's `Options.extra`:
 |---|---|
 | `RetryInterceptor.disableKey` | never resend it, for a `GET` with side effects (one that sends an OTP, say) |
 | `ConnectivityInterceptor.skipKey` | send it even when there is no network |
+| `ConnectivityInterceptor.quietServiceKey` | a 5xx answer to it gives no service verdict, for a call whose 5xx is a state the screen shows itself; any other answer still reports available |
 
 Set by the interceptors, readable in your own: `RefreshTokenInterceptor.retriedKey`
 (a renewed resend), `RetryInterceptor.retryingKey` (a retry is in progress),

@@ -425,6 +425,41 @@ void main() {
       expect(service.verdicts, ['available']);
     });
 
+    test('a quiet request\'s 503: no service verdict, still reached', () async {
+      final service = RecordingServiceObserver();
+      final observer = RecordingObserver();
+      final server = ScriptedServer([status(503)]);
+
+      final error = await failureOf(
+        client(server, observer: observer, serviceObserver: service).get<void>(
+          '/x',
+          options: Options(
+            extra: {ConnectivityInterceptor.quietServiceKey: true},
+          ),
+        ),
+      );
+
+      // Retried as any other, and failed with the server's answer.
+      expect(server.calls, 3);
+      expect(error.response?.statusCode, 503);
+      expect(service.verdicts, isEmpty);
+      expect(observer.verdicts, ['reachable']);
+    });
+
+    test('a quiet request that is answered: available', () async {
+      final service = RecordingServiceObserver();
+      final server = ScriptedServer([status(200)]);
+
+      await client(server, serviceObserver: service).get<void>(
+        '/x',
+        options: Options(
+          extra: {ConnectivityInterceptor.quietServiceKey: true},
+        ),
+      );
+
+      expect(service.verdicts, ['available']);
+    });
+
     test('a write that gets a 503 is not resent: unavailable', () async {
       final service = RecordingServiceObserver();
       final server = ScriptedServer([status(503)]);

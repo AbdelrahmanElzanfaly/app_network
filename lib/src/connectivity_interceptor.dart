@@ -51,6 +51,12 @@ class ConnectivityInterceptor extends Interceptor {
   /// Set on a request this gate refused.
   static const String noNetworkKey = 'connectivityRefused';
 
+  /// true on a request's `extra`: a 5xx answer to it reports nothing to
+  /// [serviceObserver], for a call whose own 5xx is a state of its own that
+  /// the caller shows (prices not read yet, say), not a failing server. Any
+  /// other answer still reports the service available.
+  static const String quietServiceKey = 'connectivityQuietService';
+
   /// Set once a request's outcome was reported: one verdict per request.
   static const String _reportedKey = 'connectivityReported';
 
@@ -112,7 +118,7 @@ class ConnectivityInterceptor extends Interceptor {
     if (extra[_reportedKey] != true) {
       extra[_reportedKey] = true;
       _report((observer) => observer.onReachable());
-      _reportService(response.statusCode);
+      _reportService(response.statusCode, extra);
     }
     handler.next(response);
   }
@@ -127,7 +133,7 @@ class ConnectivityInterceptor extends Interceptor {
       if (response != null) {
         extra[_reportedKey] = true;
         _report((observer) => observer.onReachable());
-        _reportService(response.statusCode);
+        _reportService(response.statusCode, extra);
       } else if (err.type == DioExceptionType.connectionError ||
           err.type == DioExceptionType.connectionTimeout ||
           _lostConnection(err)) {
@@ -163,14 +169,15 @@ class ConnectivityInterceptor extends Interceptor {
     }
   }
 
-  /// A 5xx says the server could not serve; any other status that it could.
-  /// Advisory, like the reachability verdict: an observer that throws is
-  /// ignored.
-  void _reportService(int? statusCode) {
+  /// A 5xx says the server could not serve, unless the request is marked
+  /// [quietServiceKey]; any other status that it could. Advisory, like the
+  /// reachability verdict: an observer that throws is ignored.
+  void _reportService(int? statusCode, Map<String, dynamic> extra) {
     final observer = serviceObserver;
     if (observer == null || statusCode == null) return;
     try {
       if (statusCode >= 500) {
+        if (extra[quietServiceKey] == true) return;
         observer.onServiceUnavailable();
       } else {
         observer.onServiceAvailable();
