@@ -56,3 +56,17 @@ abstract interface class ReachabilityObserver {
   /// lost after the request was sent.
   void onUnreachable();
 }
+
+/// Told whether the server could serve each request it answered — once per
+/// request, after any retries — so the app can say in one place that its
+/// service is unavailable, rather than screen by screen.
+///
+/// A request that got no answer says nothing here: that is
+/// [ReachabilityObserver]'s.
+abstract interface class ServiceObserver {
+  /// The server answered with anything but a 5xx.
+  void onServiceAvailable();
+
+  /// The server answered with a 5xx: it was reached, and could not serve.
+  void onServiceUnavailable();
+}

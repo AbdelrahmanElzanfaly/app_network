@@ -121,6 +121,16 @@ class RecordingObserver implements ReachabilityObserver {
   void onUnreachable() => verdicts.add('unreachable');
 }
 
+class RecordingServiceObserver implements ServiceObserver {
+  final List<String> verdicts = [];
+
+  @override
+  void onServiceAvailable() => verdicts.add('available');
+
+  @override
+  void onServiceUnavailable() => verdicts.add('unavailable');
+}
+
 /// Always the middle of the jitter range: delays come out exact.
 class FixedRandom implements Random {
   const FixedRandom([this.value = 0.5]);
@@ -157,6 +167,7 @@ Dio client(
   SessionRefresher? refresher,
   NetworkStatus? status,
   ReachabilityObserver? observer,
+  ServiceObserver? serviceObserver,
 }) {
   final tokenStore = tokens ?? Tokens('token');
   final dio = Dio(BaseOptions(baseUrl: 'https://api.test'));
@@ -176,8 +187,13 @@ Dio client(
         clock: clock,
         random: random,
       ),
-    if (status != null || observer != null)
-      ConnectivityInterceptor(status: status, observer: observer, clock: clock),
+    if (status != null || observer != null || serviceObserver != null)
+      ConnectivityInterceptor(
+        status: status,
+        observer: observer,
+        serviceObserver: serviceObserver,
+        clock: clock,
+      ),
     ErrorHandlerInterceptor(const StubConverter()),
   ]);
   return dio..httpClientAdapter = server;
